@@ -1,0 +1,82 @@
+services:
+  audit-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: nestjs-audit-service:latest
+    container_name: nestjs-audit-service
+    restart: unless-stopped
+    ports:
+      - "${PORT:-7004}:7004"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 7004
+      # Overrides .env's MONGO_URI to point at the containerized Mongo below,
+      # using the root credentials also defined in .env
+      MONGO_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/${MONGO_DB_NAME}?authSource=admin
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - audit-network
+
+  mongo:
+    image: mongo:7
+    container_name: audit-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--username", "${MONGO_ROOT_USER}",
+          "--password", "${MONGO_ROOT_PASSWORD}",
+          "--authenticationDatabase", "admin",
+          "--eval", "db.adminCommand('ping')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - audit-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: audit-redis
+    restart: unless-stopped
+    command: >
+      --requirepass "${REDIS_PASSWORD}"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - audit-network
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  audit-network:
+    driver: bridge
