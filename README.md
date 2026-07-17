@@ -1,98 +1,184 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# NestJS Audit Logger Service
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A lightweight, **app-based, multi-tenant audit logging service** built with NestJS and MongoDB (Mongoose).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Any client — web app, mobile app, backend service, cron job, third-party integration, etc. — can send audit events to this service by identifying itself with a unique `appId`. The service stores each event as an audit log entry, scoped to that `appId`, so multiple unrelated applications/clients can share the same audit logging service without their data mixing.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Core Concept: App-Based Context
 
-## Project setup
+Instead of tightly coupling this service to one specific application, every audit log is tagged with an `appId`.
 
-```bash
-$ pnpm install
+- Each client (web, mobile, internal service, etc.) is assigned or generates its own `appId`.
+- All create/read operations are scoped by `appId`.
+- One audit logger, many apps — no need to spin up separate audit infrastructure per client.
+
+```
+Web App        ──┐
+Mobile App     ──┼──► Audit Logger Service ──► MongoDB (audit_logs collection)
+Internal API   ──┘         (scoped by appId)
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ pnpm run start
+## Features
 
-# watch mode
-$ pnpm run start:dev
+- Create audit logs with action type, status, and before/after snapshots
+- Fetch all audit logs for a given `appId`
+- Fetch specific audit logs by `transactionId` + `appId`
+- Flexible `before` / `after` snapshot fields (accepts **any** JSON shape — perfect for diffing arbitrary entities)
+- Enum-based `actionType` and `status` for consistency across clients
+- Built-in request validation (`class-validator` + global `ValidationPipe`)
+- API key guard to protect endpoints
+- Structured logging via NestJS `Logger`
 
-# production mode
-$ pnpm run start:prod
+---
+
+## Tech Stack
+
+- [NestJS](https://nestjs.com/)
+- [Mongoose](https://mongoosejs.com/) (MongoDB ODM)
+- `class-validator` / `class-transformer` for DTO validation
+
+---
+
+## Project Structure
+
+```
+src/
+├── audit/
+│   ├── dto/
+│   │   └── create-audit.dto.ts
+│   ├── schemas/
+│   │   └── audit-log.schema.ts
+│   ├── audit.controller.ts
+│   ├── audit.service.ts
+│   └── audit.module.ts
+├── common/
+│   ├── enums/
+│   │   ├── action-type.enum.ts
+│   │   ├── audit-status.enum.ts
+│   │   └── index.ts
+│   └── guards/
+│       └── api-key.guard.ts
+└── main.ts
 ```
 
-## Run tests
+---
+
+## Setup
+
+### 1. Install dependencies
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+npm install @nestjs/mongoose mongoose class-validator class-transformer
 ```
 
-## Deployment
+### 2. Configure MongoDB connection
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+In your root `AppModule`:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+```typescript
+import { MongooseModule } from '@nestjs/mongoose';
+
+@Module({
+  imports: [
+    MongooseModule.forRoot(process.env.MONGO_URI ?? 'mongodb://localhost:27017/audit-db'),
+    AuditModule,
+  ],
+})
+export class AppModule {}
+```
+
+### 3. Enable global validation
+
+In `main.ts`:
+
+```typescript
+import { ValidationPipe } from '@nestjs/common';
+
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }),
+);
+```
+
+### 4. Set your API key
+
+The `ApiKeyGuard` protects all `/audit` routes. Configure the expected key (e.g. via `.env`) according to how your `ApiKeyGuard` reads it (header, env var, etc.).
+
+```
+API_KEY=your-secret-key
+```
+
+### 5. Run the service
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+npm run start:dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## Using the Service (Any Client)
 
-Check out a few resources that may come in handy when working with NestJS:
+Any client — regardless of platform — talks to this service over plain HTTP using its own `appId`. There is no SDK required; it's just REST calls.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Identify your client with an `appId`
 
-## Support
+Pick a stable, unique identifier for each client/application, e.g.:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+- `web-dashboard`
+- `mobile-ios-app`
+- `mobile-android-app`
+- `internal-billing-service`
 
-## Stay in touch
+Use the same `appId` consistently for every audit log that client sends, and when querying logs back.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### Example: logging an action from a web client
 
-## License
+```bash
+curl -X POST http://localhost:7004/audit/create \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-secret-key" \
+  -d '{
+    "appId": "web-dashboard",
+    "trasnsactionId": "txn_98765",
+    "title": "User profile updated",
+    "description": "Admin updated the user'\''s email and phone number",
+    "performedBy": "user_admin_001",
+    "actionType": "update",
+    "before": { "email": "old@example.com" },
+    "after": { "email": "new@example.com" }
+  }'
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+### Example: logging an action from a mobile client
+
+Same endpoint, different `appId`:
+
+```json
+{
+  "appId": "mobile-ios-app",
+  "trasnsactionId": "txn_11223",
+  "title": "Order cancelled",
+  "description": "User cancelled their order from the mobile app",
+  "performedBy": "user_555",
+  "actionType": "cancel"
+}
+```
+
+Both logs live in the same `audit_logs` collection but are fully separated by `appId` when queried.
+
+See [API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md) for full endpoint details, request/response shapes, and error codes.
+
+---
+
+## Notes
+
+- `before` / `after` fields accept **any JSON shape** (`Mixed` type in Mongoose) — you can snapshot a full entity, a partial diff, or nothing at all.
+- `status` defaults to `pending` if omitted on creation.
+- All timestamps (`createdAt`, `updatedAt`) are handled automatically by Mongoose (`timestamps: true`).
