@@ -1,7 +1,7 @@
 //src/audit/schemas/audit-log.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
-import { AuditStatus, ActionType } from 'src/common/enums';
+import { AuditStatus, ActionType } from '../../common/enums';
 
 export type AuditLogDocument = AuditLog & Document;
 

@@ -3,8 +3,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import configuration from 'src/common/configs/config';
-import { AuditModule } from 'src/audit/audit.module';
+import configuration from './common/configs/config';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [

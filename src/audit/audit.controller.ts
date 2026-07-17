@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { AuditService } from './audit.service';
 import { CreateAuditDto } from './dto/create-audit.dto';
-import { ApiKeyGuard } from 'src/common/guards/api-key.guard';
+import { ApiKeyGuard } from '../common/guards/api-key.guard';
 
 @UseGuards(ApiKeyGuard)
 @Controller('audit')

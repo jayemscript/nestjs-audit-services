@@ -4,7 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
 import { CreateAuditDto } from './dto/create-audit.dto';
-import { AuditStatus } from 'src/common/enums';
+import { AuditStatus } from '../common/enums';
 
 @Injectable()
 export class AuditService {

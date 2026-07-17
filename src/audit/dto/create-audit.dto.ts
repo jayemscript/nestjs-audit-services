@@ -6,7 +6,7 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import { ActionType, AuditStatus } from 'src/common/enums';
+import { ActionType, AuditStatus } from '../../common/enums';
 
 export class CreateAuditDto {
   @IsString()
