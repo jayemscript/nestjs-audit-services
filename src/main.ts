@@ -1,8 +1,13 @@
 import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
-import { AppModule } from './app.module';
+import bodyParser from 'body-parser';
+import express from 'express';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -10,9 +15,10 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // Trust Proxy
-  const expressApp = app.getHttpAdapter().getInstance();
+  const expressApp = app.getHttpAdapter().getInstance() as express.Express;
   expressApp.set('trust proxy', 1);
   expressApp.disable('x-powered-by');
+  expressApp.enable('strict routing');
 
   // CORS
   const allowedOrigins = configService.get<string[]>('cors.origins') ?? [];
@@ -24,6 +30,27 @@ async function bootstrap() {
   });
 
   // Middlewares
+  app.use(cookieParser());
+  app.use(bodyParser.json({ limit: '50mb' }));
+  app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
+  // Pipes
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
+  // Interceptors
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+    new TransformInterceptor(),
+  );
+
+  // Exception Filters
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // Validation
   app.useGlobalPipes(
