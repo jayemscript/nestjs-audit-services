@@ -3,10 +3,13 @@
 ################################
 # 1) Base — shared setup
 ################################
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 # Enable pnpm via corepack (bundled with Node 16.13+)
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Pinned to a specific version (rather than @latest) so builds stay
+# reproducible and don't silently break if a newer pnpm drops support
+# for the Node version in this image.
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
 ################################
 # 2) Dependencies — install once, cached
@@ -30,7 +33,7 @@ RUN pnpm prune --prod
 ################################
 # 4) Production runtime — small, no build tools
 ################################
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 WORKDIR /app
 
 ENV NODE_ENV=production
