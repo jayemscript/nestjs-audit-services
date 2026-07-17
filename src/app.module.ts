@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import configuration from 'src/common/configs/config';
+import { AuditModule } from 'src/audit/audit.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import configuration from 'src/common/configs/config';
         dbName: config.get<string>('mongo.dbName'),
       }),
     }),
+    AuditModule,
   ],
 
   controllers: [AppController],
